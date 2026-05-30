@@ -50,9 +50,9 @@ pub struct VibeColorMap {
 impl VibeColorMap {
     pub fn default_map() -> Self {
         Self {
-            negative: PackedColor::new(60, 60, 200, 255),   // cool blue
-            neutral: PackedColor::new(140, 140, 140, 255),   // gray
-            positive: PackedColor::new(255, 200, 50, 255),   // warm gold
+            negative: PackedColor::new(60, 60, 200, 255),
+            neutral: PackedColor::new(140, 140, 140, 255),
+            positive: PackedColor::new(255, 200, 50, 255),
         }
     }
 
@@ -70,15 +70,15 @@ impl VibeColorMap {
 /// Voxel material type — determined by vibe level.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum VoxelMaterial {
-    Ice,        // vibe < -0.7
-    Water,      // -0.7 to -0.3
-    Stone,      // -0.3 to -0.1
-    Grass,      // -0.1 to 0.1
-    Wood,       // 0.1 to 0.3
-    Sand,       // 0.3 to 0.5
-    Crystal,    // 0.5 to 0.7
-    GlowStone,  // 0.7 to 0.9
-    StarBlock,  // > 0.9
+    Ice,
+    Water,
+    Stone,
+    Grass,
+    Wood,
+    Sand,
+    Crystal,
+    GlowStone,
+    StarBlock,
 }
 
 impl VoxelMaterial {
@@ -125,6 +125,10 @@ pub struct VibeField {
     pub vibes: [[f64; 16]; 16],
 }
 
+impl Default for VibeField {
+    fn default() -> Self { Self::new() }
+}
+
 impl VibeField {
     pub fn new() -> Self { Self { vibes: [[0.0; 16]; 16] } }
 
@@ -148,71 +152,54 @@ impl VibeField {
         })
     }
 
-    /// Get the vibe at a position.
-    pub fn get(&self, x: usize, z: usize) -> f64 {
-        self.vibes[x.min(15)][z.min(15)]
-    }
+    pub fn get(&self, x: usize, z: usize) -> f64 { self.vibes[x.min(15)][z.min(15)] }
 
-    /// Set the vibe at a position.
     pub fn set(&mut self, x: usize, z: usize, vibe: f64) {
         if x < 16 && z < 16 { self.vibes[x][z] = vibe; }
     }
 
-    /// Average vibe across the field.
     pub fn average(&self) -> f64 {
-        let sum: f64 = self.vibes.iter().flat_map(|row| row.iter()).sum();
-        sum / 256.0
+        self.vibes.iter().flat_map(|row| row.iter()).sum::<f64>() / 256.0
     }
 
-    /// Conservation check: total vibe should be preserved.
     pub fn total_vibe(&self) -> f64 {
         self.vibes.iter().flat_map(|row| row.iter()).sum()
     }
 
-    /// Convert the field to voxel materials.
     pub fn to_materials(&self) -> [[VoxelMaterial; 16]; 16] {
         let mut mats = [[VoxelMaterial::Grass; 16]; 16];
-        for x in 0..16 {
-            for z in 0..16 {
-                mats[x][z] = VoxelMaterial::from_vibe(self.vibes[x][z]);
+        for (x, row) in self.vibes.iter().enumerate() {
+            for (z, &vibe) in row.iter().enumerate() {
+                mats[x][z] = VoxelMaterial::from_vibe(vibe);
             }
         }
         mats
     }
 
-    /// Convert to packed colors for the renderer.
     pub fn to_colors(&self, color_map: &VibeColorMap) -> [[PackedColor; 16]; 16] {
         let mut colors = [[PackedColor::new(0, 0, 0, 255); 16]; 16];
-        for x in 0..16 {
-            for z in 0..16 {
-                colors[x][z] = color_map.vibe_to_color(self.vibes[x][z]);
+        for (x, row) in self.vibes.iter().enumerate() {
+            for (z, &vibe) in row.iter().enumerate() {
+                colors[x][z] = color_map.vibe_to_color(vibe);
             }
         }
         colors
     }
 
-    /// Diff two vibe fields — returns the conservation error.
     pub fn conservation_error(&self, other: &VibeField) -> f64 {
         (self.total_vibe() - other.total_vibe()).abs()
     }
 }
 
-/// Visualization mode — how the renderer should display vibes.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum VizMode {
-    /// Flat color per voxel from vibe
     ColorMap,
-    /// Height of voxels proportional to vibe
     HeightMap,
-    /// Material type from vibe bands
     MaterialView,
-    /// Particle effects density from |vibe|
     ParticleDensity,
-    /// Glow intensity from vibe
     GlowIntensity,
 }
 
-/// A complete visualization config for a room.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoomVisualization {
     pub room_id: String,
@@ -227,26 +214,20 @@ impl RoomVisualization {
         Self { room_id: room_id.into(), field, mode, color_map: VibeColorMap::default_map(), base_height: 32 }
     }
 
-    /// Get the height at a position based on vibe.
     pub fn height_at(&self, x: usize, z: usize) -> i32 {
-        let vibe = self.field.get(x, z);
-        self.base_height + (vibe * 16.0) as i32
+        self.base_height + (self.field.get(x, z) * 16.0) as i32
     }
 
-    /// Get the color at a position.
     pub fn color_at(&self, x: usize, z: usize) -> PackedColor {
         self.color_map.vibe_to_color(self.field.get(x, z))
     }
 
-    /// Get the material at a position.
     pub fn material_at(&self, x: usize, z: usize) -> VoxelMaterial {
         VoxelMaterial::from_vibe(self.field.get(x, z))
     }
 
-    /// Particle count for a position (0-100).
     pub fn particle_density_at(&self, x: usize, z: usize) -> u8 {
-        let vibe = self.field.get(x, z);
-        (vibe.abs() * 100.0).min(100.0) as u8
+        (self.field.get(x, z).abs() * 100.0).min(100.0) as u8
     }
 }
 
@@ -275,22 +256,19 @@ mod tests {
     #[test]
     fn test_vibe_to_color_negative() {
         let map = VibeColorMap::default_map();
-        let c = map.vibe_to_color(-1.0);
-        assert_eq!(c, map.negative);
+        assert_eq!(map.vibe_to_color(-1.0), map.negative);
     }
 
     #[test]
     fn test_vibe_to_color_positive() {
         let map = VibeColorMap::default_map();
-        let c = map.vibe_to_color(1.0);
-        assert_eq!(c, map.positive);
+        assert_eq!(map.vibe_to_color(1.0), map.positive);
     }
 
     #[test]
     fn test_vibe_to_color_neutral() {
         let map = VibeColorMap::default_map();
-        let c = map.vibe_to_color(0.0);
-        assert_eq!(c, map.neutral);
+        assert_eq!(map.vibe_to_color(0.0), map.neutral);
     }
 
     #[test]
@@ -305,8 +283,8 @@ mod tests {
     #[test]
     fn test_vibe_field_radial() {
         let field = VibeField::radial(1.0, 0.1);
-        assert!(field.get(7, 7) > 0.5); // center is high
-        assert!(field.get(0, 0) < field.get(7, 7)); // corner is lower
+        assert!(field.get(7, 7) > 0.5);
+        assert!(field.get(0, 0) < field.get(7, 7));
     }
 
     #[test]
@@ -322,7 +300,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conservation_error() {
+    fn test_conservation_error_zero() {
         let a = VibeField::from_fn(|_, _| 1.0);
         let b = VibeField::from_fn(|_, _| 1.0);
         assert!(a.conservation_error(&b) < 1e-10);
@@ -354,14 +332,14 @@ mod tests {
     fn test_room_viz_height() {
         let field = VibeField::from_fn(|_, _| 0.5);
         let viz = RoomVisualization::new("test", field, VizMode::HeightMap);
-        assert_eq!(viz.height_at(0, 0), 40); // 32 + 0.5*16 = 40
+        assert_eq!(viz.height_at(0, 0), 40);
     }
 
     #[test]
     fn test_room_viz_negative_height() {
         let field = VibeField::from_fn(|_, _| -0.5);
         let viz = RoomVisualization::new("test", field, VizMode::HeightMap);
-        assert_eq!(viz.height_at(0, 0), 24); // 32 + (-0.5)*16 = 24
+        assert_eq!(viz.height_at(0, 0), 24);
     }
 
     #[test]
@@ -373,9 +351,7 @@ mod tests {
 
     #[test]
     fn test_material_colors_differ() {
-        let ice = VoxelMaterial::Ice.color();
-        let fire = VoxelMaterial::StarBlock.color();
-        assert_ne!(ice, fire);
+        assert_ne!(VoxelMaterial::Ice.color(), VoxelMaterial::StarBlock.color());
     }
 
     #[test]
